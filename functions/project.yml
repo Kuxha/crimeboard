@@ -1,0 +1,63 @@
+# DO Functions project configuration
+# Deploy with: doctl serverless deploy functions/
+
+targetNamespace: ''
+parameters: {}
+environment: {}
+
+packages:
+  - name: crimeboard
+    environment:
+      SPACES_KEY: ${SPACES_KEY}
+      SPACES_SECRET: ${SPACES_SECRET}
+      SPACES_REGION: ${SPACES_REGION}
+      SPACES_BUCKET: ${SPACES_BUCKET}
+      SPACES_ENDPOINT: ${SPACES_ENDPOINT}
+    functions:
+      - name: upload
+        runtime: nodejs:18
+        web: true
+        main: index.js
+        limits:
+          memory: 256
+          timeout: 30000
+
+      - name: ocr
+        runtime: nodejs:18
+        web: true
+        main: index.js
+        limits:
+          memory: 512
+          timeout: 120000
+
+      - name: tag-image
+        runtime: nodejs:18
+        web: true
+        main: index.js
+        limits:
+          memory: 256
+          timeout: 30000
+
+      - name: composite
+        runtime: nodejs:18
+        web: true
+        main: index.js
+        limits:
+          memory: 256
+          timeout: 30000
+
+      - name: casefile-pdf
+        runtime: nodejs:18
+        web: true
+        main: index.js
+        limits:
+          memory: 512
+          timeout: 180000
+
+      - name: signed-url
+        runtime: nodejs:18
+        web: true
+        main: index.js
+        limits:
+          memory: 128
+          timeout: 10000
