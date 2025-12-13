@@ -1,5 +1,6 @@
 // Signed URL function - generates presigned URLs for Spaces objects
 // Follows AWS SDK pattern documented in DO Spaces docs
+// Accepts: key (or spaces_key for backward compat), action, contentType, expires_seconds
 
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
@@ -18,10 +19,12 @@ function getS3Client() {
 
 async function main(args) {
     try {
-        const { spaces_key, action, expires_seconds } = args;
+        // Accept both 'key' and 'spaces_key' for compatibility
+        const { key, spaces_key, action, expires_seconds, contentType } = args;
+        const objectKey = key || spaces_key;
 
-        if (!spaces_key) {
-            return { body: { error: 'spaces_key is required' } };
+        if (!objectKey) {
+            return { body: { error: 'key is required' } };
         }
 
         const validActions = ['read', 'write'];
@@ -39,12 +42,13 @@ async function main(args) {
         if (requestedAction === 'write') {
             command = new PutObjectCommand({
                 Bucket: bucket,
-                Key: spaces_key
+                Key: objectKey,
+                ContentType: contentType || 'application/octet-stream'
             });
         } else {
             command = new GetObjectCommand({
                 Bucket: bucket,
-                Key: spaces_key
+                Key: objectKey
             });
         }
 
@@ -53,7 +57,7 @@ async function main(args) {
         return {
             body: {
                 success: true,
-                spaces_key,
+                key: objectKey,
                 action: requestedAction,
                 signed_url,
                 expires_in: expiresIn
