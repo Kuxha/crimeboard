@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { runMultiAgentOrchestration, buildFinalOutput } from '@/lib/agents';
+import { assignDefaultLayout, needsLayout } from '@/lib/layout';
 
 // POST /api/cases/[id]/analyze - Run multi-agent AI analysis on case evidence
 export async function POST(
@@ -47,19 +48,29 @@ export async function POST(
         );
 
         // Build final output
-        const analysis = buildFinalOutput(orchestration, caseData.title);
+        let analysis = buildFinalOutput(orchestration, caseData.title);
 
-        // Validate we got something useful
+        // Validate we got something useful, fallback to evidence-based nodes
         if (!analysis.evidence_nodes?.length && !analysis.suspects?.length) {
             console.warn('[Analyze] No nodes or suspects generated, using fallback');
-            // Create basic nodes from evidence
             analysis.evidence_nodes = evidence.map((e: any, i: number) => ({
                 id: `EVID-${String(i + 1).padStart(2, '0')}`,
                 type: e.kind === 'image' ? 'PHOTO' : e.kind === 'pdf' ? 'PDF' : 'STATEMENT',
                 title: e.filename,
-                data: { url: null, text: e.filename, tags: [] },
-                position: { x: 100 + (i % 3) * 200, y: 100 + Math.floor(i / 3) * 150 }
+                data: {
+                    url: null,
+                    text: e.filename,
+                    tags: [],
+                    kind: e.kind
+                },
+                position: { x: 0, y: 0 }
             }));
+        }
+
+        // Apply deterministic lane layout if positions are missing or overlapping
+        if (needsLayout(analysis.evidence_nodes)) {
+            console.log('[Analyze] Applying deterministic lane layout...');
+            analysis.evidence_nodes = assignDefaultLayout(analysis.evidence_nodes, evidence);
         }
 
         // Update case with analysis
@@ -69,14 +80,15 @@ export async function POST(
       WHERE id = $2
     `, [JSON.stringify(analysis), caseId]);
 
-        // Store board nodes
+        // Store board nodes with computed positions
         if (analysis.evidence_nodes) {
+            // Clear existing nodes first
+            await query(`DELETE FROM board_nodes WHERE case_id = $1`, [caseId]);
+
             for (const node of analysis.evidence_nodes) {
                 await query(`
           INSERT INTO board_nodes (case_id, node_id, node_type, title, data_json, x, y)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
-          ON CONFLICT (case_id, node_id) 
-          DO UPDATE SET title = $4, data_json = $5, x = $6, y = $7
         `, [
                     caseId,
                     node.id,
