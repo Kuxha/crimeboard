@@ -1,11 +1,11 @@
-// PostgreSQL connection pool
-// Uses DO Managed PostgreSQL connection string
+import { Pool } from "pg";
 
-import { Pool } from 'pg';
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error("DATABASE_URL is not set");
 
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    connectionString,
+    ssl: { rejectUnauthorized: false },
     max: 10,
 });
 

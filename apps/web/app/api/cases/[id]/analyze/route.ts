@@ -1,9 +1,9 @@
-// API route for analyzing case evidence with Gradient AI
+// API route for analyzing case evidence with Multi-Agent Orchestration
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
-import { callGradientAgent, DESK_SERGEANT_PROMPT, parseAnalysisResult } from '@/lib/gradient';
+import { runMultiAgentOrchestration, buildFinalOutput } from '@/lib/agents';
 
-// POST /api/cases/[id]/analyze - Run AI analysis on case evidence
+// POST /api/cases/[id]/analyze - Run multi-agent AI analysis on case evidence
 export async function POST(
     request: NextRequest,
     { params }: { params: { id: string } }
@@ -29,32 +29,37 @@ export async function POST(
         // Update case status to analyzing
         await query(`UPDATE cases SET status = 'analyzing' WHERE id = $1`, [caseId]);
 
-        // Build prompt for Gradient agent
+        console.log(`[Analyze] Starting analysis for case ${caseId} with ${evidence.length} evidence items`);
+
+        // Build evidence list string for agents
         const evidenceList = evidence.map((e: any, i: number) => {
-            return `EVID-${String(i + 1).padStart(2, '0')}: ${e.kind} - "${e.filename}"${e.extracted_text_json ? ` - Text: ${JSON.stringify(e.extracted_text_json)}` : ''
+            const evidId = `EVID-${String(i + 1).padStart(2, '0')}`;
+            return `${evidId}: ${e.kind} - "${e.filename}"${e.extracted_text_json ? ` - Text: ${JSON.stringify(e.extracted_text_json)}` : ''
                 }${e.tags_json ? ` - Tags: ${JSON.stringify(e.tags_json)}` : ''
                 }`;
         }).join('\n');
 
-        const userPrompt = `Analyze the following case and evidence:
+        // Run multi-agent orchestration
+        const orchestration = await runMultiAgentOrchestration(
+            caseData.title,
+            caseId,
+            evidenceList
+        );
 
-CASE TITLE: ${caseData.title}
-CASE ID: ${caseId}
+        // Build final output
+        const analysis = buildFinalOutput(orchestration, caseData.title);
 
-EVIDENCE ITEMS:
-${evidenceList}
-
-Build the evidence board JSON with nodes for each evidence item, connections between related evidence, and a timeline of events if determinable. Output ONLY the JSON response, no other text.`;
-
-        // Call Gradient agent
-        const response = await callGradientAgent(userPrompt, DESK_SERGEANT_PROMPT);
-
-        // Parse response
-        const analysis = parseAnalysisResult(response);
-
-        if (!analysis) {
-            console.error('Failed to parse analysis response:', response);
-            throw new Error('Invalid analysis response format');
+        // Validate we got something useful
+        if (!analysis.evidence_nodes?.length && !analysis.suspects?.length) {
+            console.warn('[Analyze] No nodes or suspects generated, using fallback');
+            // Create basic nodes from evidence
+            analysis.evidence_nodes = evidence.map((e: any, i: number) => ({
+                id: `EVID-${String(i + 1).padStart(2, '0')}`,
+                type: e.kind === 'image' ? 'PHOTO' : e.kind === 'pdf' ? 'PDF' : 'STATEMENT',
+                title: e.filename,
+                data: { url: null, text: e.filename, tags: [] },
+                position: { x: 100 + (i % 3) * 200, y: 100 + Math.floor(i / 3) * 150 }
+            }));
         }
 
         // Update case with analysis
@@ -77,7 +82,7 @@ Build the evidence board JSON with nodes for each evidence item, connections bet
                     node.id,
                     node.type,
                     node.title,
-                    JSON.stringify(node.data),
+                    JSON.stringify(node.data || {}),
                     node.position?.x || 0,
                     node.position?.y || 0
                 ]);
@@ -86,29 +91,40 @@ Build the evidence board JSON with nodes for each evidence item, connections bet
 
         // Store edges
         if (analysis.connections) {
-            // Clear existing edges
             await query(`DELETE FROM board_edges WHERE case_id = $1`, [caseId]);
 
             for (const conn of analysis.connections) {
                 await query(`
           INSERT INTO board_edges (case_id, source_id, target_id, label, confidence)
           VALUES ($1, $2, $3, $4, $5)
-        `, [caseId, conn.source_id, conn.target_id, conn.label, conn.confidence]);
+        `, [
+                    caseId,
+                    conn.source_id,
+                    conn.target_id,
+                    conn.label,
+                    conn.confidence || 0.5
+                ]);
             }
         }
 
+        console.log(`[Analyze] Complete: ${analysis.evidence_nodes?.length || 0} nodes, ${analysis.suspects?.length || 0} suspects`);
+
         return NextResponse.json({
             success: true,
-            analysis
+            analysis,
+            stats: {
+                nodes: analysis.evidence_nodes?.length || 0,
+                connections: analysis.connections?.length || 0,
+                suspects: analysis.suspects?.length || 0
+            }
         });
     } catch (error) {
         console.error('Error analyzing case:', error);
 
-        // Update status to error
         await query(`UPDATE cases SET status = 'error' WHERE id = $1`, [params.id]).catch(() => { });
 
         return NextResponse.json(
-            { error: 'Failed to analyze case' },
+            { error: 'Failed to analyze case', details: (error as Error).message },
             { status: 500 }
         );
     }

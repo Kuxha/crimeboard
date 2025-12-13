@@ -3,10 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 
-interface RegisterData {
+interface RegisterFile {
+    key: string;
     filename: string;
-    spaces_key: string;
-    mime_type: string;
+    kind: 'image' | 'pdf' | 'text' | 'document';
+    contentType: string;
+    sizeBytes?: number;
 }
 
 // POST /api/cases/[id]/register - Register evidence after direct Spaces upload
@@ -15,7 +17,7 @@ export async function POST(
     { params }: { params: { id: string } }
 ) {
     try {
-        const { files } = await request.json() as { files: RegisterData[] };
+        const { files } = await request.json() as { files: RegisterFile[] };
         const caseId = params.id;
 
         if (!files || !Array.isArray(files) || files.length === 0) {
@@ -28,25 +30,21 @@ export async function POST(
         const registered = [];
 
         for (const file of files) {
-            if (!file.filename || !file.spaces_key) continue;
-
-            // Determine kind from mime type
-            let kind = 'document';
-            if (file.mime_type?.startsWith('image/')) kind = 'photo';
-            else if (file.mime_type === 'text/plain' || file.filename.endsWith('.txt')) kind = 'statement';
+            if (!file.filename || !file.key) continue;
 
             // Insert into database
             const id = uuidv4();
             await query(`
         INSERT INTO evidence (id, case_id, kind, filename, spaces_key, mime_type)
         VALUES ($1, $2, $3, $4, $5, $6)
-      `, [id, caseId, kind, file.filename, file.spaces_key, file.mime_type]);
+      `, [id, caseId, file.kind, file.filename, file.key, file.contentType]);
 
             registered.push({
                 id,
-                kind,
+                kind: file.kind,
                 filename: file.filename,
-                spaces_key: file.spaces_key,
+                spaces_key: file.key,
+                size_bytes: file.sizeBytes
             });
         }
 

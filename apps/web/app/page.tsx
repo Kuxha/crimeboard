@@ -66,11 +66,11 @@ export default function HomePage() {
             <div className="text-center mb-12">
                 <h1 className="text-4xl md:text-5xl font-bold mb-4">
                     <span className="bg-gradient-to-r from-laser-cyan via-laser-purple to-laser-pink bg-clip-text text-transparent">
-                        Evidence Board
+                        Gen AI Murder Board
                     </span>
                 </h1>
                 <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-                    Upload evidence. Agents auto-build a floating laser evidence board.
+                    Upload evidence. 7 AI agents build a murder board with suspects.
                     One click generates a courtroom-ready Case File PDF.
                 </p>
 
@@ -149,10 +149,10 @@ export default function HomePage() {
                                             {c.title}
                                         </h3>
                                         <span className={`px-2 py-0.5 text-xs rounded-full ${c.status === 'analyzed'
-                                                ? 'bg-green-500/20 text-green-400'
-                                                : c.status === 'analyzing'
-                                                    ? 'bg-yellow-500/20 text-yellow-400'
-                                                    : 'bg-slate-500/20 text-slate-400'
+                                            ? 'bg-green-500/20 text-green-400'
+                                            : c.status === 'analyzing'
+                                                ? 'bg-yellow-500/20 text-yellow-400'
+                                                : 'bg-slate-500/20 text-slate-400'
                                             }`}>
                                             {c.status}
                                         </span>

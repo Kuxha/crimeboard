@@ -5,9 +5,9 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-    title: 'CrimeBoard | Anti-Gravity Evidence Board',
-    description: 'Upload evidence. Agents auto-build a floating laser evidence board. One click generates a courtroom-ready Case File PDF.',
-    keywords: 'evidence, investigation, crime board, AI analysis',
+    title: 'CrimeBoard | Gen AI Murder Board',
+    description: 'Upload evidence. AI agents auto-build a murder board with suspects. One click generates a courtroom-ready Case File PDF.',
+    keywords: 'evidence, investigation, crime board, AI analysis, murder board',
 };
 
 export default function RootLayout({
@@ -31,7 +31,7 @@ export default function RootLayout({
                                 <h1 className="text-xl font-bold bg-gradient-to-r from-laser-cyan to-laser-pink bg-clip-text text-transparent">
                                     CrimeBoard
                                 </h1>
-                                <p className="text-xs text-slate-400">Anti-Gravity Evidence Board</p>
+                                <p className="text-xs text-slate-400">Gen AI Murder Board</p>
                             </div>
                         </a>
 

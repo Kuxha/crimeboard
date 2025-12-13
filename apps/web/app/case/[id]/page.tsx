@@ -19,15 +19,8 @@ interface Evidence {
     kind: string;
     filename: string;
     spaces_key: string;
+    preview_url?: string;
     created_at: string;
-}
-
-interface Job {
-    id: string;
-    job_type: string;
-    status: string;
-    started_at: string;
-    finished_at: string | null;
 }
 
 export default function CasePage() {
@@ -36,11 +29,13 @@ export default function CasePage() {
 
     const [caseData, setCaseData] = useState<Case | null>(null);
     const [evidence, setEvidence] = useState<Evidence[]>([]);
+    const [evidenceUrls, setEvidenceUrls] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [analyzing, setAnalyzing] = useState(false);
     const [showUpload, setShowUpload] = useState(false);
     const [selectedNode, setSelectedNode] = useState<any>(null);
     const [generating, setGenerating] = useState(false);
+    const [analysisStats, setAnalysisStats] = useState<any>(null);
 
     useEffect(() => {
         fetchCase();
@@ -66,7 +61,17 @@ export default function CasePage() {
             const res = await fetch(`/api/cases/${caseId}/evidence`);
             if (res.ok) {
                 const data = await res.json();
-                setEvidence(data.evidence || []);
+                const evidenceItems = data.evidence || [];
+                setEvidence(evidenceItems);
+
+                // Build URL map for board
+                const urlMap: Record<string, string> = {};
+                evidenceItems.forEach((e: Evidence, i: number) => {
+                    if (e.preview_url) {
+                        urlMap[`EVID-${String(i + 1).padStart(2, '0')}`] = e.preview_url;
+                    }
+                });
+                setEvidenceUrls(urlMap);
             }
         } catch (error) {
             console.error('Failed to fetch evidence:', error);
@@ -75,6 +80,7 @@ export default function CasePage() {
 
     async function handleAnalyze() {
         setAnalyzing(true);
+        setAnalysisStats(null);
         try {
             const res = await fetch(`/api/cases/${caseId}/analyze`, {
                 method: 'POST'
@@ -83,9 +89,14 @@ export default function CasePage() {
             if (res.ok) {
                 const data = await res.json();
                 setCaseData(prev => prev ? { ...prev, analysis_json: data.analysis, status: 'analyzed' } : prev);
+                setAnalysisStats(data.stats);
+            } else {
+                const error = await res.json();
+                alert(`Analysis failed: ${error.error || 'Unknown error'}`);
             }
         } catch (error) {
             console.error('Failed to analyze:', error);
+            alert('Analysis failed. Check console for details.');
         } finally {
             setAnalyzing(false);
         }
@@ -100,7 +111,6 @@ export default function CasePage() {
 
             if (res.ok) {
                 const data = await res.json();
-                // Open PDF in new tab
                 if (data.pdf_url) {
                     window.open(data.pdf_url, '_blank');
                 }
@@ -143,6 +153,7 @@ export default function CasePage() {
     }
 
     const analysisData = caseData.analysis_json;
+    const suspects = analysisData?.suspects || [];
 
     return (
         <div className="h-[calc(100vh-4rem)] flex flex-col">
@@ -155,7 +166,9 @@ export default function CasePage() {
                     <div>
                         <h1 className="text-xl font-semibold text-white">{caseData.title}</h1>
                         <p className="text-sm text-slate-500">
-                            {evidence.length} evidence items • Created {new Date(caseData.created_at).toLocaleDateString()}
+                            {evidence.length} evidence items
+                            {suspects.length > 0 && ` • ${suspects.length} suspects`}
+                            {analysisStats && ` • ${analysisStats.nodes} nodes, ${analysisStats.connections} connections`}
                         </p>
                     </div>
                 </div>
@@ -176,7 +189,7 @@ export default function CasePage() {
                         {analyzing ? (
                             <>
                                 <div className="w-4 h-4 border-2 border-noir-900/30 border-t-noir-900 rounded-full animate-spin"></div>
-                                Analyzing...
+                                Analyzing (7 agents)...
                             </>
                         ) : (
                             '🔍 Analyze'
@@ -202,6 +215,38 @@ export default function CasePage() {
                 </div>
             </div>
 
+            {/* Suspects Summary Bar (when analysis exists) */}
+            {suspects.length > 0 && (
+                <div className="flex-shrink-0 px-4 py-2 bg-noir-800/30 border-b border-noir-700 flex items-center gap-4 overflow-x-auto">
+                    <span className="text-sm text-slate-500 flex-shrink-0">Suspects:</span>
+                    {suspects.map((s: any) => (
+                        <div
+                            key={s.suspect_id}
+                            className={`flex-shrink-0 px-3 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer hover:bg-noir-700 transition-colors ${s.guilt_probability >= 70 ? 'bg-red-900/30' :
+                                    s.guilt_probability >= 40 ? 'bg-yellow-900/30' : 'bg-noir-700'
+                                }`}
+                            onClick={() => setSelectedNode({
+                                id: s.suspect_id,
+                                label: s.suspect_id,
+                                title: s.display_name,
+                                nodeType: 'SUSPECT',
+                                guilt_probability: s.guilt_probability,
+                                suspect_data: s,
+                                tags: [],
+                                text: s.key_attributes?.description
+                            })}
+                        >
+                            <span className="text-sm text-white">{s.display_name}</span>
+                            <span className={`text-xs font-bold ${s.guilt_probability >= 70 ? 'text-red-400' :
+                                    s.guilt_probability >= 40 ? 'text-yellow-400' : 'text-slate-400'
+                                }`}>
+                                {s.guilt_probability}%
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {/* Main Content */}
             <div className="flex-1 flex overflow-hidden">
                 {/* Evidence Board */}
@@ -209,6 +254,7 @@ export default function CasePage() {
                     {analysisData ? (
                         <EvidenceBoard
                             analysisData={analysisData}
+                            evidenceUrls={evidenceUrls}
                             onNodeClick={handleNodeClick}
                         />
                     ) : (
@@ -223,7 +269,7 @@ export default function CasePage() {
                                 <p className="text-slate-400 mb-6">
                                     {evidence.length === 0
                                         ? 'Upload evidence files to begin analysis'
-                                        : 'Click "Analyze" to have AI agents build your evidence board'}
+                                        : 'Click "Analyze" to run 7 AI agents on your evidence'}
                                 </p>
                                 {evidence.length === 0 ? (
                                     <button
@@ -265,8 +311,9 @@ export default function CasePage() {
                                 key={e.id}
                                 className="flex-shrink-0 px-3 py-1.5 bg-noir-700 rounded-lg text-sm flex items-center gap-2"
                             >
-                                <span className={`w-2 h-2 rounded-full ${e.kind === 'photo' ? 'bg-green-400' :
-                                        e.kind === 'statement' ? 'bg-yellow-400' : 'bg-blue-400'
+                                <span className={`w-2 h-2 rounded-full ${e.kind === 'image' ? 'bg-green-400' :
+                                        e.kind === 'pdf' ? 'bg-blue-400' :
+                                            e.kind === 'text' ? 'bg-yellow-400' : 'bg-slate-400'
                                     }`}></span>
                                 {e.filename}
                             </div>
