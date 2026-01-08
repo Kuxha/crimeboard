@@ -142,19 +142,6 @@ doctl apps create --spec .do/app.yaml
 
 ---
 
-## 🎬 Demo Script (90 seconds)
-
-| Time | Action |
-|------|--------|
-| 0-10s | "CrimeBoard uses 7 AI agents orchestrated by DigitalOcean Gradient" |
-| 10-25s | Create case, multi-select upload (3-4 files at once) |
-| 25-45s | Click Analyze → watch "Analyzing (7 agents)..." |
-| 45-60s | Board populates with evidence nodes AND suspect nodes |
-| 60-75s | Click suspect → show guilt %, reasons, relationships |
-| 75-90s | Click Close Case File → PDF shows full suspect analysis |
-
----
-
 ## 🏆 DigitalOcean Products Used
 
 | Product | How We Used It |
@@ -184,17 +171,6 @@ crimeboard_ocean/
 └── .do/app.yaml                # App Platform spec
 ```
 
----
-
-## 🔒 Why Presigned URLs Are Mandatory
-
-1. **Spaces buckets are private** → No public object access
-2. **1MB Functions limit** → Can't send file bytes through API
-3. **Browser-direct upload** → Presigned PUT URL bypasses API
-4. **Secure rendering** → Presigned GET URLs for images/PDFs
-5. **Expiring access** → URLs auto-expire, preventing permanent leaks
-
----
 
 ## 📄 License
 MIT - Built for DigitalOcean Hackathon
